@@ -39,26 +39,21 @@ module Registration
     end
 
     def register(email, reg_code)
-      @scc = SccApi::Connection.new(email, reg_code)
-
-      # set the current language to receive translated error messages
-      @scc.language = ::Registration::Helpers.language
-
-      if @url
-        log.info "Using custom registration URL: #{@url.inspect}"
-        @scc.url = @url
-      end
+      initialize_scc(email, reg_code)
 
       # announce (register the system) first
       @credentials = @scc.announce
-
-      # ensure the zypp config directories are writable in inst-sys
-      ::Registration::SwMgmt.zypp_config_writable!
 
       # write the global credentials
       @credentials.write
     end
 
+    def load_credentials
+      initialize_scc
+
+      credentials = SccApi::Credentials.read(SCC_CREDENTIALS)
+      @scc.credentials = credentials
+    end
 
     def register_products(products)
       product_services = products.map do |product|
@@ -101,5 +96,23 @@ module Registration
     def self.is_registered?
       File.exist?(SCC_CREDENTIALS)
     end
+
+    private
+
+    def initialize_scc(email = nil, reg_code = nil)
+      @scc = SccApi::Connection.new(email, reg_code)
+
+      # set the current language to receive translated error messages
+      @scc.language = ::Registration::Helpers.language
+
+      if @url
+        log.info "Using custom registration URL: #{@url.inspect}"
+        @scc.url = @url
+      end
+
+      # ensure the zypp config directories are writable in inst-sys
+      ::Registration::SwMgmt.zypp_config_writable!
+    end
+
   end
 end

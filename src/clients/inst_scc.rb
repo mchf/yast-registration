@@ -120,7 +120,7 @@ module Yast
             end
 
             # then register the product(s)
-            products = ::Registration::SwMgmt.products_to_register
+            products = ::Registration::SwMgmt.base_products_to_register
             product_services = Popup.Feedback(
               n_("Registering Product...", "Registering Products...", products.size),
               _("Contacting the SUSE Customer Center server")) do
@@ -142,6 +142,56 @@ module Yast
       end
 
       return ret
+    end
+
+    def refresh_base_product
+      url = ::Registration::Helpers.registration_url
+      @registration = ::Registration::Registration.new(url)
+
+      # load the credentials from the system
+      @registration.load_credentials
+
+      ::Registration::SccHelpers.catch_registration_errors do
+        # then register the product(s)
+        products = ::Registration::SwMgmt.base_products_to_register
+        product_services = Popup.Feedback(
+          n_("Registering Product...", "Registering Products...", products.size),
+          _("Contacting the SUSE Customer Center server")) do
+
+          @registration.register_products(products)
+        end
+
+        # remember the base products for later (to get the respective addons)
+        ::Registration::Storage::BaseProducts.instance.products = products
+
+        # select repositories to use in installation (e.g. enable/disable Updates)
+        select_repositories(product_services)
+      end
+    end
+
+    # display the registration update dialog
+    def show_registration_update_dialog
+      Wizard.SetContents(
+        _("SUSE Customer Center Registration"),
+        Label(_("Registration is being updated...")),
+        # TODO FIXME
+        "",
+        GetInstArgs.enable_back,
+        GetInstArgs.enable_next || Mode.normal
+      )
+    end
+
+    def update_registration
+      show_registration_update_dialog
+
+      if refresh_base_product
+        return :next
+      else
+        # automatic registration refresh during upgrade failed, register from scratch
+        Report.Error(_("Automatic registration refresh failed.\n" +
+              "You can manually register the system from scratch."))
+        return :register
+      end
     end
 
     # content for the main registration dialog
@@ -633,10 +683,8 @@ module Yast
         ::Registration::SwMgmt.copy_old_credentials(Installation.destdir)
 
         if ::Registration::Registration.is_registered?
-          # TODO FIXME: register the base system using the old credentials
-
-          # on failure re-register from scratch
-          return :register
+          # update the registration using the old credentials
+          return :update
         end
       end
 
@@ -650,6 +698,7 @@ module Yast
       aliases = {
         "register"        => lambda { register_base_system() },
         "select_addons"   => lambda { select_addons() },
+        "update"          => lambda { update_registration() },
         "register_addons" => lambda { register_addons() },
         "media_addons"    => lambda { media_addons() },
         "check"           => lambda { registration_check() }
@@ -658,10 +707,17 @@ module Yast
       sequence = {
         "ws_start" => "check",
         "check" => {
+          :abort    => :abort,
+          :cancel   => :abort,
+          :register => "register",
+          :update   => "update",
+          :next     => :next
+        },
+        "update" => {
           :abort   => :abort,
           :cancel   => :abort,
-          :register    => "register",
-          :next    => :next
+          :next => "select_addons",
+          :register => "register",
         },
         "register"  => {
           :abort   => :abort,
