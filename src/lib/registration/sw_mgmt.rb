@@ -149,6 +149,27 @@ module Registration
       repos
     end
 
+    # copy old NCC/SCC credentials from the old installation to new SCC credentials
+    def self.copy_old_credentials(target_dir)
+      # check for NCC credentials
+      dir = SccApi::Credentials::DEFAULT_CREDENTIALS_DIR
+      ncc_file = File.join(target_dir, dir, "NCCcredentials")
+      scc_file = File.join(target_dir, dir, "SCCCredentials")
+      new_file = File.join(dir, "SCCCredentials")
+
+      if File.exist?(ncc_file)
+        log.info "Copying the old NCC credentials from previous installation"
+        log.debug "Copying #{ncc_file} to #{new_file}"
+        File.cp(ncc_file, new_file)
+      end
+
+      if File.exist?(scc_file)
+        log.info "Copying the old SCC credentials from previous installation"
+        log.debug "Copying #{scc_file} to #{new_file}"
+        File.cp(scc_file, new_file)
+      end
+    end
+
   end
 end
 

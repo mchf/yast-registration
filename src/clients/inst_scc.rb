@@ -629,6 +629,17 @@ module Yast
     end
 
     def registration_check
+      if Mode.update
+        ::Registration::SwMgmt.copy_old_credentials(Installation.destdir)
+
+        if ::Registration::Registration.is_registered?
+          # TODO FIXME: register the base system using the old credentials
+
+          # on failure re-register from scratch
+          return :register
+        end
+      end
+
       return :register unless ::Registration::Registration.is_registered?
 
       display_registered_dialog
